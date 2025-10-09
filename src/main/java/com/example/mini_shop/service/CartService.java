@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.mini_shop.entity.Product;
 import com.example.mini_shop.model.CartItem;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 
@@ -18,6 +19,7 @@ public class CartService {
 
 	private final RedisTemplate<String, Object> redisTemplate;
 	private final ProductService productService;
+	private final ObjectMapper objectMapper;
 	private static final String CART_KEY_PREFIX = "cart:";
 	private static final long CART_TTL = 24; // 24 hour
 
@@ -46,7 +48,10 @@ public class CartService {
 
 		List<CartItem> cartItems = new ArrayList<>();
 		for (Object item : items) {
-			cartItems.add((CartItem) item);
+			CartItem cartItem = objectMapper.convertValue(item, CartItem.class);
+			cartItems.add(cartItem);
+			// LinkedHashMap 에러
+			// cartItems.add((CartItem) item);
 		}
 		return cartItems;
 	}

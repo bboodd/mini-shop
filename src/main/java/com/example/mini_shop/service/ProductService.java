@@ -22,7 +22,7 @@ public class ProductService {
 	private final ProductRepository productRepository;
 	private final ProductSearchRepository productSearchRepository;
 
-	@Cacheable(value = "products", key = "#id")
+	// 개별 상품 조회는 캐시하지 않음 (LinkedHashMap 문제 방지)
 	public Product getProduct(Long id) {
 		return productRepository.findById(id)
 			.orElseThrow(() -> new RuntimeException("Product not found"));

@@ -1,6 +1,9 @@
 package com.example.mini_shop.model;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,7 +16,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CartItem {
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class CartItem implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
