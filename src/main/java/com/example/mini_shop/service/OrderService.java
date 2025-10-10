@@ -13,7 +13,9 @@ import com.example.mini_shop.model.CartItem;
 import com.example.mini_shop.repository.OrderRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -25,6 +27,7 @@ public class OrderService {
 
 	@Transactional
 	public Order createOrder(String userId, String customerName, String customerEmail) {
+		log.info("Creating order for user: {}", userId);
 		List<CartItem> cartItems = cartService.getCart(userId);
 
 		if (cartItems.isEmpty()) {
@@ -62,6 +65,8 @@ public class OrderService {
 
 		order.setTotalAmount(totalAmount);
 		Order savedOrder = orderRepository.save(order);
+
+		log.info("Order created successfully: {}", savedOrder.getId());
 
 		// 장바구니 비우기
 		cartService.clearCart(userId);
