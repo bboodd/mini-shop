@@ -1,16 +1,22 @@
-# 미니 쇼핑몰 프로젝트
+# 미니 쇼핑몰
 
 Spring Boot + PostgreSQL + Redis + Elasticsearch + React로 구성된 간단한 쇼핑몰
 
 ## 기술 스택
 
 ### Backend
-- **Spring Boot 3.5.6** - 애플리케이션 프레임워크
+- **Spring Boot 3.2.0** - 애플리케이션 프레임워크
 - **PostgreSQL** - 메인 데이터베이스 (상품, 주문 정보)
 - **Redis** - 캐싱 및 장바구니 세션 저장
+- **RabbitMQ** - 비동기 메시징 및 이벤트 기반 아키텍처
 - **Elasticsearch** - 상품 검색
 - **Spring Data JPA** - ORM
 - **Lombok** - 코드 간소화
+
+### ELK Stack (로그 관리)
+- **Elasticsearch** - 로그 저장 및 검색
+- **Logstash** - 로그 수집 및 변환
+- **Kibana** - 로그 시각화 및 모니터링
 
 ### Frontend
 - **React 18** - UI 라이브러리
@@ -92,12 +98,24 @@ mini-shop/
 ### 2. 인프라 실행 (Docker)
 
 ```bash
-# PostgreSQL, Redis, Elasticsearch 실행
+# 디렉토리 생성
+mkdir -p logstash/config logstash/pipeline logs
+
+# PostgreSQL, Redis, RabbitMQ, Elasticsearch, Logstash, Kibana 실행
 docker-compose up -d
 
 # 컨테이너 확인
 docker-compose ps
+
+# 로그 확인
+docker-compose logs -f
 ```
+
+**접속 확인:**
+- Elasticsearch: http://localhost:9200
+- Kibana: http://localhost:5601
+- Logstash: http://localhost:9600
+- **RabbitMQ Management**: http://localhost:15672 (rabbitmq/rabbitmq)
 
 ### 3. Backend 실행
 
@@ -213,6 +231,21 @@ npm start
 
 ## 트러블슈팅
 
+### LocalDateTime 직렬화 오류
+Redis에 저장할 때 LocalDateTime 직렬화 오류가 발생하면:
+```java
+// RedisConfig에서 JavaTimeModule 등록 확인
+ObjectMapper mapper = new ObjectMapper();
+mapper.registerModule(new JavaTimeModule());
+mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+```
+
+엔티티에 @JsonFormat 어노테이션 추가:
+```java
+@JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+private LocalDateTime createdAt;
+```
+
 ### Elasticsearch 연결 오류
 ```bash
 # Elasticsearch 상태 확인
@@ -235,8 +268,6 @@ docker exec -it shop-redis redis-cli ping
 # PostgreSQL 접속 테스트
 docker exec -it shop-postgres psql -U postgres -d shopdb
 ```
-
-## etc
 
 ### 1. 로그 확인
 ```bash
@@ -265,7 +296,3 @@ mvn spring-boot:run
 - [ ] 페이지네이션
 - [ ] 리뷰 시스템
 - [ ] 위시리스트
-
-## 라이센스
-
-MIT License

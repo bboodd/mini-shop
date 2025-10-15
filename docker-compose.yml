@@ -74,9 +74,24 @@ services:
       elasticsearch:
         condition: service_healthy
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: shop-rabbitmq
+    ports:
+      - "5672:5672" # 메시지 브로커
+      - "15672:15672" # 관리 콘솔
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_PASS: rabbitmq
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - shop-network
+
 volumes:
   postgres_data:
   es_data:
+  rabbitmq_data:
 
 networks:
   shop-network:

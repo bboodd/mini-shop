@@ -30,6 +30,13 @@ spring:
   elasticsearch:
     uris: http://localhost:9200
 
+  # RabbitMQ 설정
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: rabbitmq
+    password: rabbitmq
+
 server:
   port: 8080
 

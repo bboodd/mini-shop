@@ -1,5 +1,6 @@
 package com.example.mini_shop.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.cache.annotation.CacheEvict;
@@ -9,6 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.mini_shop.document.ProductDocument;
 import com.example.mini_shop.entity.Product;
+import com.example.mini_shop.event.ElasticsearchIndexEvent;
+import com.example.mini_shop.event.StockUpdatedEvent;
+import com.example.mini_shop.messaging.EventPublisher;
 import com.example.mini_shop.repository.ProductRepository;
 import com.example.mini_shop.repository.ProductSearchRepository;
 
@@ -23,6 +27,8 @@ public class ProductService {
 
 	private final ProductRepository productRepository;
 	private final ProductSearchRepository productSearchRepository;
+	private final EventPublisher eventPublisher;
+
 
 	// 개별 상품 조회는 캐시하지 않음 (LinkedHashMap 문제 방지)
 	public Product getProduct(Long id) {
@@ -47,9 +53,15 @@ public class ProductService {
 	public Product createProduct(Product product) {
 		log.info("Creating new product: {}", product.getName());
 		Product savedProduct = productRepository.save(product);
-		// Elasticsearch에 인덱싱
-		productSearchRepository.save(ProductDocument.from(savedProduct));
-		log.info("Product created successfully with id: {}", savedProduct.getId());
+
+		// Elasticsearch 인덱싱 이벤트 발행 (비동기)
+		eventPublisher.publishElasticsearchIndex(
+			ElasticsearchIndexEvent.builder()
+				.productId(savedProduct.getId())
+				.operation("INDEX")
+				.timestamp(LocalDateTime.now())
+				.build()
+		);
 		return savedProduct;
 	}
 
@@ -58,6 +70,9 @@ public class ProductService {
 	public Product updateProduct(Long id, Product productDetails) {
 		log.info("Updating product with id: {}", id);
 		Product product = getProduct(id);
+
+		Integer previousStock = product.getStock();
+
 		product.setName(productDetails.getName());
 		product.setDescription(productDetails.getDescription());
 		product.setPrice(productDetails.getPrice());
@@ -65,9 +80,30 @@ public class ProductService {
 		product.setCategory(productDetails.getCategory());
 
 		Product updatedProduct = productRepository.save(product);
-		// Elasticsearch 업데이트
-		productSearchRepository.save(ProductDocument.from(updatedProduct));
 		log.info("Product updated successfully: {}", id);
+
+		// 재고 변동이 있으면 재고 업데이트 이벤트 발행
+		if (!previousStock.equals(productDetails.getStock())) {
+			eventPublisher.publishStockUpdated(
+				StockUpdatedEvent.builder()
+					.productId(updatedProduct.getId())
+					.productName(updatedProduct.getName())
+					.previousStock(previousStock)
+					.currentStock(updatedProduct.getStock())
+					.operation(updatedProduct.getStock() > previousStock ? "INCREASE" : "DECREASE")
+					.updatedAt(LocalDateTime.now())
+					.build()
+			);
+		}
+
+		// Elasticsearch 업데이트 이벤트 발행 (비동기)
+		eventPublisher.publishElasticsearchIndex(
+			ElasticsearchIndexEvent.builder()
+				.productId(updatedProduct.getId())
+				.operation("UPDATE")
+				.timestamp(LocalDateTime.now())
+				.build()
+		);
 		return updatedProduct;
 	}
 
@@ -76,8 +112,15 @@ public class ProductService {
 	public void deleteProduct(Long id) {
 		log.info("Deleting product with id: {}", id);
 		productRepository.deleteById(id);
-		productSearchRepository.deleteById(String.valueOf(id));
-		log.info("Product deleted successfully: {}", id);
+
+		// Elasticsearch 삭제 이벤트 발행 (비동기)
+		eventPublisher.publishElasticsearchIndex(
+			ElasticsearchIndexEvent.builder()
+				.productId(id)
+				.operation("DELETE")
+				.timestamp(LocalDateTime.now())
+				.build()
+		);
 	}
 
 	public List<ProductDocument> searchProducts(String keyword) {
@@ -93,5 +136,36 @@ public class ProductService {
 		List<Product> products = productRepository.findByCategory(category);
 		log.info("Found {} products in category: {}", products.size(), category);
 		return products;
+	}
+
+	@Transactional
+	public void decreaseStock(Long productId, Integer quantity) {
+		log.info("Decreasing stock for product: {}, quantity: {}", productId, quantity);
+		Product product = getProduct(productId);
+
+		if (product.getStock() < quantity) {
+			log.error("Insufficient stock: productId={}, requested={}, available={}",
+				productId, quantity, product.getStock());
+			throw new RuntimeException("Insufficient stock");
+		}
+
+		Integer previousStock = product.getStock();
+		product.setStock(product.getStock() - quantity);
+		productRepository.save(product);
+
+		log.info("Stock decreased successfully: productId={}, previousStock={}, currentStock={}",
+			productId, previousStock, product.getStock());
+
+		// 재고 업데이트 이벤트 발행
+		eventPublisher.publishStockUpdated(
+			StockUpdatedEvent.builder()
+				.productId(product.getId())
+				.productName(product.getName())
+				.previousStock(previousStock)
+				.currentStock(product.getStock())
+				.operation("DECREASE")
+				.updatedAt(LocalDateTime.now())
+				.build()
+		);
 	}
 }
